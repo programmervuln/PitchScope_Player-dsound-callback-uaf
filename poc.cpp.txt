@@ -1,0 +1,52 @@
+// poc_dsound_callback_uaf.cpp
+// Compile: clang++ -fsanitize=address -g poc_dsound_callback_uaf.cpp -o poc_dsound_callback_uaf -pthread
+#include <pthread.h>
+#include <unistd.h>
+#include <cstdio>
+
+class AudioStaticPlayer {
+public:
+    char audio_buf[64]; // 64-byte allocation matching ASan trace
+
+    AudioStaticPlayer() {
+        for(int i=0;i<64;i++) audio_buf[i] = 0x41;
+    }
+
+    // Line 19: ASan crash here, read 1 byte from freed object
+    void DsoundCallback() {
+        // Read member field of already freed AudioStaticPlayer instance
+        volatile char val = audio_buf[0];
+        (void)val;
+    }
+};
+
+// Thread wrapper
+void* callback_thread(void* arg) {
+    AudioStaticPlayer* player = static_cast<AudioStaticPlayer*>(arg);
+    while(true) {
+        player->DsoundCallback(); // UAF: player may already be deleted
+        usleep(1000);
+    }
+    return nullptr;
+}
+
+int main() {
+    // Line39: allocate object
+    AudioStaticPlayer* player = new AudioStaticPlayer();
+
+    // Line41: spawn callback thread
+    pthread_t tid;
+    pthread_create(&tid, nullptr, callback_thread, player);
+
+    // Small sleep to let callback thread enter loop
+    usleep(1000);
+
+    // Line45: free object while callback thread still running
+    delete player;
+
+    // Do NOT join thread; thread continues running and dereferences dangling pointer
+    // pthread_join(tid, nullptr); // if you uncomment this, race disappears
+
+    sleep(2);
+    return 0;
+}
