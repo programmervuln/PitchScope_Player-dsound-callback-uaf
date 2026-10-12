@@ -64,7 +64,7 @@ Disclaimer
 This PoC is for security research purposes only. Use only on systems you own or have authorization to test.
 
 
-## 可选精简版（如果你想要短一点，适合GHSA快速预览）
+simplified version
 ```markdown
 # PitchScope_Player Dsound Callback UAF PoC
 
